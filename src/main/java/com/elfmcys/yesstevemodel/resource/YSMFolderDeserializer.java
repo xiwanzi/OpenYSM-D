@@ -39,7 +39,7 @@ public class YSMFolderDeserializer implements AutoCloseable {
         if (Files.isDirectory(sourcePath)) {
             this.rootPath = sourcePath;
             this.zipFileSystem = null;
-        } else if (sourcePath.toString().endsWith(".zip") || sourcePath.toString().endsWith(".ysm")) {
+        } else if (sourcePath.toString().toLowerCase(Locale.ROOT).endsWith(".zip") || sourcePath.toString().toLowerCase(Locale.ROOT).endsWith(".ysm")) {
             URI uri = URI.create("jar:" + sourcePath.toUri());
             this.zipFileSystem = FileSystems.newFileSystem(uri, Collections.emptyMap());
             this.rootPath = this.zipFileSystem.getPath("/");

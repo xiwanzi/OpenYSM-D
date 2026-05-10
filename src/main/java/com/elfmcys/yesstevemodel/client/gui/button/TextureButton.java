@@ -1,6 +1,7 @@
 package com.elfmcys.yesstevemodel.client.gui.button;
 
 import com.elfmcys.yesstevemodel.capability.PlayerCapabilityProvider;
+import com.elfmcys.yesstevemodel.client.ClientLocalModelManager;
 import com.elfmcys.yesstevemodel.client.entity.PlayerPreviewEntity;
 import com.elfmcys.yesstevemodel.client.model.ModelAssembly;
 import com.elfmcys.yesstevemodel.client.gui.ModelMetadataPresenter;
@@ -37,8 +38,15 @@ public class TextureButton extends Button {
         LocalPlayer localPlayer = Minecraft.getInstance().player;
         if (localPlayer != null) {
             localPlayer.getCapability(PlayerCapabilityProvider.PLAYER_CAP).ifPresent(cap -> {
+                String selectedModelId = this.previewEntity.getModelId();
+                String selectedTextureName = this.previewEntity.getCurrentTextureName();
                 cap.setCurrentTexture(this.previewEntity.getCurrentTextureName());
-                NetworkHandler.sendToServer(new C2SRequestSwitchModelPacket(this.previewEntity.getModelId(), this.previewEntity.getCurrentTextureName()));
+                if (ClientLocalModelManager.isLocalModelId(selectedModelId)) {
+                    ClientLocalModelManager.saveCurrentSelection(selectedModelId, cap.getCurrentTextureName());
+                    return;
+                }
+                ClientLocalModelManager.clearCurrentSelection();
+                NetworkHandler.sendToServer(new C2SRequestSwitchModelPacket(selectedModelId, selectedTextureName));
             });
         }
     }

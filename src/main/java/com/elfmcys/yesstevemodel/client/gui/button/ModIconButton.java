@@ -3,6 +3,7 @@ package com.elfmcys.yesstevemodel.client.gui.button;
 import com.elfmcys.yesstevemodel.YesSteveModel;
 import com.elfmcys.yesstevemodel.capability.PlayerCapabilityProvider;
 import com.elfmcys.yesstevemodel.capability.StarModelsCapabilityProvider;
+import com.elfmcys.yesstevemodel.client.ClientLocalModelManager;
 import com.elfmcys.yesstevemodel.network.NetworkHandler;
 import com.elfmcys.yesstevemodel.network.message.C2SSetStarModelPacket;
 import net.minecraft.client.Minecraft;
@@ -45,6 +46,9 @@ public class ModIconButton extends FlatColorButton {
             localPlayer.getCapability(PlayerCapabilityProvider.PLAYER_CAP).ifPresent(cap -> {
                 localPlayer.getCapability(StarModelsCapabilityProvider.STAR_MODELS_CAP).ifPresent(cap2 -> {
                     String str = cap.getModelId();
+                    if (ClientLocalModelManager.isLocalModelId(str)) {
+                        return;
+                    }
                     if (cap2.containsModel(str)) {
                         cap2.removeModel(str);
                         NetworkHandler.sendToServer(C2SSetStarModelPacket.remove(str));

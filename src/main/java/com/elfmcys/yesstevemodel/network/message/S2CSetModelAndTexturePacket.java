@@ -1,6 +1,7 @@
 package com.elfmcys.yesstevemodel.network.message;
 
 import com.elfmcys.yesstevemodel.capability.PlayerCapabilityProvider;
+import com.elfmcys.yesstevemodel.client.ClientLocalModelManager;
 import com.elfmcys.yesstevemodel.event.EntityJoinCallbackEvent;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.world.entity.Entity;
@@ -55,7 +56,9 @@ public class S2CSetModelAndTexturePacket {
     @OnlyIn(Dist.CLIENT)
     public static void applyOnClient(Entity entity, S2CSetModelAndTexturePacket other) {
         entity.getCapability(PlayerCapabilityProvider.PLAYER_CAP).ifPresent(cap -> {
-            cap.initModelWithTexture(other.modelId, other.textureId);
+            if (!ClientLocalModelManager.restoreSelectionFor(entity, cap)) {
+                cap.initModelWithTexture(other.modelId, other.textureId);
+            }
             cap.setForceDisabled(other.disabled);
             S2CSyncPlayerStatePacket.handleCapability(entity, other.entityModelSync);
         });

@@ -1,6 +1,7 @@
 package com.elfmcys.yesstevemodel.client.animation.molang.functions.ysm;
 
 import com.elfmcys.yesstevemodel.capability.PlayerCapability;
+import com.elfmcys.yesstevemodel.client.ClientLocalModelManager;
 import com.elfmcys.yesstevemodel.client.entity.CustomPlayerEntity;
 import com.elfmcys.yesstevemodel.geckolib3.core.AnimatableEntity;
 import com.elfmcys.yesstevemodel.geckolib3.core.molang.context.IContext;
@@ -20,8 +21,11 @@ public class Sync extends AbstractClientPlayerFunction {
         if (!context.entity().isClientSide()) {
             return null;
         }
-        if ((context.entity().geoInstance() instanceof PlayerCapability) && NetworkHandler.isClientConnected()) {
+        if ((context.entity().geoInstance() instanceof PlayerCapability cap) && NetworkHandler.isClientConnected()) {
             if (context.entity().entity() instanceof LocalPlayer) {
+                if (ClientLocalModelManager.isLocalModelId(cap.getModelId())) {
+                    return null;
+                }
                 NetworkHandler.sendToServer(new C2SSyncAnimationExpressionPacket(collectArgs(context, arguments)));
                 return null;
             }

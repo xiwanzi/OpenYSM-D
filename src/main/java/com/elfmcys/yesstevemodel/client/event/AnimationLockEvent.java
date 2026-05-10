@@ -2,6 +2,7 @@ package com.elfmcys.yesstevemodel.client.event;
 
 import com.elfmcys.yesstevemodel.YesSteveModel;
 import com.elfmcys.yesstevemodel.capability.PlayerCapabilityProvider;
+import com.elfmcys.yesstevemodel.client.ClientLocalModelManager;
 import com.elfmcys.yesstevemodel.client.input.AnimationRouletteKey;
 import com.elfmcys.yesstevemodel.network.NetworkHandler;
 import com.elfmcys.yesstevemodel.network.message.C2SPlayAnimationPacket;
@@ -33,7 +34,7 @@ public class AnimationLockEvent {
             localPlayer.getCapability(PlayerCapabilityProvider.PLAYER_CAP).ifPresent(cap -> {
                 if (cap.isModelSwitching()) {
                     cap.clearModelSwitch();
-                    if (NetworkHandler.isClientConnected()) {
+                    if (NetworkHandler.isClientConnected() && !ClientLocalModelManager.isLocalModelId(cap.getModelId())) {
                         NetworkHandler.sendToServer(C2SPlayAnimationPacket.createDefault());
                     }
                 }

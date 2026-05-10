@@ -1,6 +1,7 @@
 package com.elfmcys.yesstevemodel.client.gui;
 
 import com.elfmcys.yesstevemodel.client.ClientModelManager;
+import com.elfmcys.yesstevemodel.client.ClientLocalModelManager;
 import com.elfmcys.yesstevemodel.YesSteveModel;
 import com.elfmcys.yesstevemodel.client.entity.PlayerPreviewEntity;
 import com.elfmcys.yesstevemodel.client.event.ModScreenEvent;
@@ -57,7 +58,7 @@ public class PlayerModelScreen extends Screen implements IGuiWidget {
 
     private final HashSet<String> hiddenModels;
 
-    private final Map<String, ModelPackData> modelPackMap;
+    private Map<String, ModelPackData> modelPackMap;
 
     private Map<String, ModelAssembly> filteredModels;
 
@@ -99,7 +100,9 @@ public class PlayerModelScreen extends Screen implements IGuiWidget {
             this.hiddenModels.addAll(ServerConfig.CLIENT_NOT_DISPLAY_MODELS.get());
         }
         ClientModelManager.registerGuiWidget(this);
+        ClientLocalModelManager.reloadLocalModelsAsync(false);
         this.modelPackMap = new Object2ReferenceOpenHashMap<>(ClientModelManager.getModelPackMap());
+        normalizeCurrentPath();
     }
 
     public ModelButton createModelButton(int x, int y, boolean isAuthLocked, PlayerPreviewEntity previewEntity, ModelAssembly modelAssembly) {
@@ -174,6 +177,9 @@ public class PlayerModelScreen extends Screen implements IGuiWidget {
         if (this.category == Category.AUTH) {
             localPlayer.getCapability(AuthModelsCapabilityProvider.AUTH_MODELS_CAP).ifPresent(cap -> {
                 for (Map.Entry<String, ModelAssembly> entry : ClientModelManager.getModelAssemblyMap().entrySet()) {
+                    if (ClientLocalModelManager.isLocalModelId(entry.getKey())) {
+                        continue;
+                    }
                     if (cap.containsModel(entry.getKey()) || !entry.getValue().getTextureRegistry().isAuthModel()) {
                         this.filteredModels.put(entry.getKey(), entry.getValue());
                     }
@@ -183,6 +189,9 @@ public class PlayerModelScreen extends Screen implements IGuiWidget {
         if (this.category == Category.STAR) {
             localPlayer.getCapability(StarModelsCapabilityProvider.STAR_MODELS_CAP).ifPresent(cap2 -> {
                 for (Map.Entry<String, ModelAssembly> entry : ClientModelManager.getModelAssemblyMap().entrySet()) {
+                    if (ClientLocalModelManager.isLocalModelId(entry.getKey())) {
+                        continue;
+                    }
                     if (cap2.containsModel(entry.getKey())) {
                         this.filteredModels.put(entry.getKey(), entry.getValue());
                     }
@@ -205,6 +214,9 @@ public class PlayerModelScreen extends Screen implements IGuiWidget {
         } else {
             String str = lowerCase;
             this.filteredModels.entrySet().removeIf(entry3 -> {
+                if (ClientLocalModelManager.isLocalModelId(entry3.getKey()) && StringUtils.isBlank(currentPath)) {
+                    return true;
+                }
                 return shouldFilterModel(FileTypeUtil.splitFileNameAndParentDir(entry3.getKey()).left(), entry3.getValue(), str);
             });
             String str2 = lowerCase;
@@ -692,12 +704,29 @@ public class PlayerModelScreen extends Screen implements IGuiWidget {
 
     @Override
     public void onModelsLoaded(Map<String, ModelAssembly> map) {
+        this.modelPackMap = new Object2ReferenceOpenHashMap<>(ClientModelManager.getModelPackMap());
+        normalizeCurrentPath();
         init();
     }
 
     @Override
     public void onModelsUpdated(Map<String, ModelAssembly> map) {
+        this.modelPackMap = new Object2ReferenceOpenHashMap<>(ClientModelManager.getModelPackMap());
+        normalizeCurrentPath();
         init();
+    }
+
+    private void normalizeCurrentPath() {
+        if (StringUtils.isBlank(currentPath)) {
+            return;
+        }
+        boolean pathExists = this.modelPackMap.containsKey(currentPath)
+                || this.modelPackMap.keySet().stream().anyMatch(path -> path.startsWith(currentPath))
+                || ClientModelManager.getModelAssemblyMap().keySet().stream().anyMatch(modelId -> modelId.startsWith(currentPath));
+        if (!pathExists) {
+            currentPath = StringPool.EMPTY;
+            resetCurrentPage();
+        }
     }
 
     private Optional<ModelPackData> getPackData(String str) {

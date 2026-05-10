@@ -61,7 +61,15 @@ import java.util.stream.IntStream;
 
 public class YSMClientMapper {
 
-    private static byte[] toPng(byte[] data, int imageFormat, int width, int height) {
+    public static byte[] toPng(byte[] data, int imageFormat, int width, int height) {
+        return toPng(data, imageFormat, width, height, true);
+    }
+
+    public static byte[] toPngSilently(byte[] data, int imageFormat, int width, int height) {
+        return toPng(data, imageFormat, width, height, false);
+    }
+
+    private static byte[] toPng(byte[] data, int imageFormat, int width, int height, boolean logFailure) {
         if (data == null || data.length == 0 || imageFormat == 2) {
             return data;
         }
@@ -103,6 +111,9 @@ public class YSMClientMapper {
                 return baos.toByteArray();
             }
         } catch (Exception e) {
+            if (!logFailure) {
+                return data;
+            }
             e.printStackTrace();
         }
 

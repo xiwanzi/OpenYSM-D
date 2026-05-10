@@ -152,7 +152,6 @@ public class ClientModelManager {
             byte[] decrypted;
             if (syncStep == 1) {
                 decrypted = YsmCrypt.decrypt(packetBytes, YsmCrypt.publicKey);
-                System.out.println(Arrays.toString(decrypted));
                 if (decrypted != null) handlePacket01(decrypted);
             } else if (syncStep == 2) {
                 decrypted = YsmCrypt.decrypt(packetBytes, lastKey);
@@ -171,7 +170,21 @@ public class ClientModelManager {
             }
         } catch (Exception e) {
             YesSteveModel.LOGGER.error("[YSM] Sync Error at step " + syncStep, e);
+            abortSyncAfterError();
         }
+    }
+
+    private static void abortSyncAfterError() {
+        syncStep = 1;
+        key1 = null;
+        lastKey = null;
+        serverKey = null;
+        clientKey = null;
+        currentCacheFolderName = null;
+        pendingModelsCount = 0;
+        cachedModelHashes.clear();
+        serverModels.clear();
+        onSyncError(null);
     }
 
     private static void handlePacket01(byte[] decryptedBuffer) throws Exception {
@@ -203,15 +216,21 @@ public class ClientModelManager {
 
     private static void handlePacket03(YSMByteBuf buf) throws Exception {
         buf.skipGarbageHeader();
-        int type = buf.readVarInt(); // expect 3
+        buf.readVarInt(); // Packet discriminator. Keep tolerant for original YSM server compatibility.
         long folderHash = buf.readVarLong();
         currentCacheFolderName = Long.toHexString(folderHash);
 
+        if (buf.getRawBuf().readableBytes() < 112) {
+            throw new IOException("Malformed model sync packet 03: missing server/client keys.");
+        }
         serverKey = new byte[56];
         buf.getRawBuf().readBytes(serverKey);
 
         clientKey = new byte[56];
         buf.getRawBuf().readBytes(clientKey);
+
+        cachedModelHashes.clear();
+        serverModels.clear();
 
         File cacheDir = ServerModelManager.CACHE_CLIENT.resolve(currentCacheFolderName).toFile();
         if (!cacheDir.exists()) cacheDir.mkdirs();
@@ -241,10 +260,19 @@ public class ClientModelManager {
 
             if (YSMClientCache.verifyFileContent(cachedFile, hash1, hash2)) {
                 YesSteveModel.LOGGER.info("[YSM] Cache HIT & Validated: " + ctx.uuid);
-                // 命中缓存
-                byte[] fileBytes = Files.readAllBytes(cachedFile.toPath());
-                byte[] decompressed = YsmCrypt.read(fileBytes, clientKey);
-                parseAndLoadModel(decompressed, modelId, isAuth);
+                try {
+                    byte[] fileBytes = Files.readAllBytes(cachedFile.toPath());
+                    byte[] decompressed = YsmCrypt.read(fileBytes, clientKey);
+                    parseAndLoadModel(decompressed, modelId, isAuth);
+                } catch (Exception cacheReadFailure) {
+                    YesSteveModel.LOGGER.warn("[YSM] Cache read failed for " + ctx.uuid + " (" + modelId + "), requesting from server.", cacheReadFailure);
+                    try {
+                        Files.deleteIfExists(cachedFile.toPath());
+                    } catch (IOException cleanupFailure) {
+                        YesSteveModel.LOGGER.warn("[YSM] Failed to delete invalid cache file: " + cachedFile, cleanupFailure);
+                    }
+                    modelsToRequest.add(mHash);
+                }
             } else {
                 YesSteveModel.LOGGER.info("[YSM] Cache MISS or Invalid: " + ctx.uuid + " -> Requesting...");
                 modelsToRequest.add(mHash);
@@ -263,9 +291,9 @@ public class ClientModelManager {
                 int textureWidth = buf.readVarInt();
                 int textureHeight = buf.readVarInt();
                 int imageFormat = buf.readVarInt();
-                int unkImageData = buf.readVarInt();
+                buf.readVarInt();
 
-                iconTexture = new OuterFileTexture(textureData);
+                iconTexture = createPackIconTexture(textureData, textureWidth, textureHeight, imageFormat);
             }
 
             String folderName = "";
@@ -340,6 +368,27 @@ public class ClientModelManager {
         }
     }
 
+    private static OuterFileTexture createPackIconTexture(byte[] textureData, int textureWidth, int textureHeight, int imageFormat) {
+        byte[] pngData = YSMClientMapper.toPngSilently(textureData, imageFormat, textureWidth, textureHeight);
+        if (!isPng(pngData)) {
+            return null;
+        }
+        return new OuterFileTexture(pngData);
+    }
+
+    private static boolean isPng(byte[] data) {
+        return data != null
+                && data.length >= 8
+                && (data[0] & 0xff) == 0x89
+                && data[1] == 0x50
+                && data[2] == 0x4e
+                && data[3] == 0x47
+                && data[4] == 0x0d
+                && data[5] == 0x0a
+                && data[6] == 0x1a
+                && data[7] == 0x0a;
+    }
+
     private static void handlePacket05(YSMByteBuf buf) throws Exception {
         buf.skipGarbageHeader();
         int type = buf.readVarInt();
@@ -374,25 +423,48 @@ public class ClientModelManager {
             File cacheDir = ServerModelManager.CACHE_CLIENT.resolve(folder).toFile();
             if (!cacheDir.exists()) cacheDir.mkdirs();
 
-            byte[] cachedFileData = YsmCrypt.transcodeServerDataToClientCache(ctx.fileBuffer, serverKey, clientKey, hash1, hash2);
-
             String legitFileName = YSMClientCache.generateCacheFileName(hash1, hash2, clientKey);
             File outFile = new File(cacheDir, legitFileName);
 
-            try (FileOutputStream fos = new FileOutputStream(outFile)) {
-                fos.write(cachedFileData);
+            try {
+                DownloadedModelData modelData = decodeDownloadedModel(ctx.fileBuffer, serverKey, clientKey, hash1, hash2);
+                try (FileOutputStream fos = new FileOutputStream(outFile)) {
+                    fos.write(modelData.cacheData);
+                }
+                YesSteveModel.LOGGER.info("[YSM] Downloaded & Cached: " + outFile.getAbsolutePath());
+                parseAndLoadModel(modelData.decompressed, ctx.modelId, ctx.isAuth);
+            } catch (Exception decodeFailure) {
+                YesSteveModel.LOGGER.warn("[YSM] Failed to decode downloaded model " + ctx.uuid + " (" + ctx.modelId + "), skipping this model so sync can finish.", decodeFailure);
+                try {
+                    Files.deleteIfExists(outFile.toPath());
+                } catch (IOException cleanupFailure) {
+                    YesSteveModel.LOGGER.warn("[YSM] Failed to delete invalid downloaded cache file: " + outFile, cleanupFailure);
+                }
+            } finally {
+                ctx.fileBuffer = null;
+                pendingModelsCount--;
+                if (pendingModelsCount <= 0) {
+                    YesSteveModel.LOGGER.info("[YSM] All requested model downloads handled. Handshake complete!");
+                    onSyncComplete();
+                }
             }
-            ctx.fileBuffer = null;
+        }
+    }
 
-            YesSteveModel.LOGGER.info("[YSM] Downloaded & Cached: " + outFile.getAbsolutePath());
-            byte[] decompressed = YsmCrypt.read(cachedFileData, clientKey);
+    private record DownloadedModelData(byte[] cacheData, byte[] decompressed) {}
 
-            parseAndLoadModel(decompressed, ctx.modelId, ctx.isAuth);
-
-            pendingModelsCount--;
-            if (pendingModelsCount <= 0) {
-                YesSteveModel.LOGGER.info("[YSM] All missing models downloaded and loaded successfully!");
-                onSyncComplete();
+    private static DownloadedModelData decodeDownloadedModel(byte[] serverData, byte[] serverKey, byte[] clientKey, long hash1, long hash2) throws Exception {
+        try {
+            byte[] cacheData = YsmCrypt.transcodeServerDataToClientCache(serverData, serverKey, clientKey, hash1, hash2);
+            return new DownloadedModelData(cacheData, YsmCrypt.read(cacheData, clientKey));
+        } catch (Exception transcodeFailure) {
+            try {
+                byte[] decompressed = YsmCrypt.read(serverData, clientKey);
+                return new DownloadedModelData(serverData, decompressed);
+            } catch (Exception clientKeyFailure) {
+                byte[] decompressed = YsmCrypt.read(serverData, serverKey);
+                byte[] cacheData = YsmCrypt.encryptServerCache(decompressed, clientKey, hash1, hash2);
+                return new DownloadedModelData(cacheData, decompressed);
             }
         }
     }
@@ -503,6 +575,53 @@ public class ClientModelManager {
         return modelPackMap;
     }
 
+    public static void replaceLocalModels(Map<String, ModelAssembly> localModels, Map<String, ModelPackData> localPacks) {
+        Object2ReferenceOpenHashMap<String, ModelAssembly> modelMap = new Object2ReferenceOpenHashMap<>(modelAssemblyMap);
+        ArrayList<ModelAssembly> removedModels = new ArrayList<>();
+        modelMap.entrySet().removeIf(entry -> {
+            if (ClientLocalModelManager.isLocalModelId(entry.getKey())) {
+                removedModels.add(entry.getValue());
+                return true;
+            }
+            return false;
+        });
+        modelMap.putAll(localModels);
+        modelAssemblyMap = modelMap;
+
+        Object2ReferenceOpenHashMap<String, ModelPackData> packMap = new Object2ReferenceOpenHashMap<>(modelPackMap);
+        ArrayList<ModelPackData> removedPacks = new ArrayList<>();
+        packMap.entrySet().removeIf(entry -> {
+            if (ClientLocalModelManager.isLocalPackPath(entry.getKey())) {
+                removedPacks.add(entry.getValue());
+                return true;
+            }
+            return false;
+        });
+        packMap.putAll(localPacks);
+        modelPackMap = packMap;
+
+        for (ModelAssembly assembly : removedModels) {
+            if (assembly != null) {
+                for (AbstractTexture tex : assembly.getTextures()) {
+                    UploadManager.removeTexture(tex);
+                }
+            }
+        }
+        for (ModelPackData packData : removedPacks) {
+            if (packData.getTexture() != null) {
+                ResourceLocation location = FileTypeUtil.getPackIconLocation(packData.getPath());
+                Minecraft.getInstance().getTextureManager().release(location);
+            }
+        }
+        for (ModelPackData packData : localPacks.values()) {
+            if (packData.getTexture() != null) {
+                ResourceLocation location = FileTypeUtil.getPackIconLocation(packData.getPath());
+                Minecraft.getInstance().getTextureManager().register(location, packData.getTexture());
+            }
+        }
+        forEachGuiWidget(guiWidget -> guiWidget.onModelsUpdated(modelMap));
+    }
+
     public static Optional<ModelAssembly> getModelContext(String str) {
         return Optional.ofNullable(modelAssemblyMap.get(str));
     }
@@ -516,6 +635,8 @@ public class ClientModelManager {
 
         // 触发预加载
         loadDefaultModel();
+        runPendingModelCallback();
+        flushPendingModels();
         model = localModelContext;
         if (model != null) return model;
 
@@ -621,6 +742,12 @@ public class ClientModelManager {
 
     private static void onModelPacksReceived(ModelPackData[] packDataArr) {
         Object2ReferenceOpenHashMap<String, ModelPackData> newPackMap = new Object2ReferenceOpenHashMap<>();
+        Object2ReferenceOpenHashMap<String, ModelPackData> localPackMap = new Object2ReferenceOpenHashMap<>();
+        for (ModelPackData packData : modelPackMap.values()) {
+            if (ClientLocalModelManager.isLocalPackPath(packData.getPath())) {
+                localPackMap.put(packData.getPath(), packData);
+            }
+        }
 
         for (ModelPackData packData : packDataArr) {
             if (StringUtils.isBlank(packData.getName())) {
@@ -637,11 +764,12 @@ public class ClientModelManager {
         }
 
         for (ModelPackData packData : modelPackMap.values()) {
-            if (!newPackMap.containsKey(packData.getPath()) && packData.getTexture() != null) {
+            if (!newPackMap.containsKey(packData.getPath()) && !ClientLocalModelManager.isLocalPackPath(packData.getPath()) && packData.getTexture() != null) {
                 ResourceLocation location = FileTypeUtil.getPackIconLocation(packData.getPath());
                 Minecraft.getInstance().submit(() -> Minecraft.getInstance().textureManager.release(location));
             }
         }
+        newPackMap.putAll(localPackMap);
         modelPackMap = newPackMap;
     }
 
@@ -749,8 +877,11 @@ public class ClientModelManager {
         cachedModelHashes.clear();
 
         Minecraft.getInstance().execute(() -> {
+            runPendingModelCallback();
+            flushPendingModels();
             syncState.setState(SyncState.IDLE);
             forEachGuiWidget(IGuiWidget::onSyncComplete);
+            ClientLocalModelManager.reloadLocalModelsAsync(true);
         });
     }
 

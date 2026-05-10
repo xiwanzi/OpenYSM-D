@@ -3,6 +3,7 @@ package com.elfmcys.yesstevemodel.client.gui.button;
 import com.elfmcys.yesstevemodel.YesSteveModel;
 import com.elfmcys.yesstevemodel.capability.PlayerCapabilityProvider;
 import com.elfmcys.yesstevemodel.capability.StarModelsCapabilityProvider;
+import com.elfmcys.yesstevemodel.client.ClientLocalModelManager;
 import com.elfmcys.yesstevemodel.resource.models.Metadata;
 import com.elfmcys.yesstevemodel.client.animation.AnimationTracker;
 import com.elfmcys.yesstevemodel.client.entity.PlayerPreviewEntity;
@@ -133,17 +134,20 @@ public class ModelButton extends Button {
         LocalPlayer localPlayer;
         if (!this.isStarred && (localPlayer = Minecraft.getInstance().player) != null) {
             localPlayer.getCapability(PlayerCapabilityProvider.PLAYER_CAP).ifPresent(cap -> {
-                if (NetworkHandler.isClientConnected()) {
-                    if (cap.hasMolangVars(this.modelIdHolder.getModelAssembly().getModelData().getHashId())) {
-                        cap.initModelWithTexture(this.modelIdHolder.getModelId(), this.modelIdHolder.getCurrentTextureName());
-                        NetworkHandler.sendToServer(new C2SRequestSwitchModelPacket(cap.getModelId(), cap.getCurrentTextureName()));
-                        return;
-                    } else {
-                        NetworkHandler.sendToServer(new C2SRequestSwitchModelPacket(this.modelIdHolder.getModelId(), this.modelIdHolder.getCurrentTextureName()));
-                        return;
-                    }
+                String selectedModelId = this.modelIdHolder.getModelId();
+                String selectedTextureName = this.modelIdHolder.getCurrentTextureName();
+                if (ClientLocalModelManager.isLocalModelId(selectedModelId)) {
+                    cap.initModelWithTexture(selectedModelId, selectedTextureName);
+                    ClientLocalModelManager.saveCurrentSelection(cap.getModelId(), cap.getCurrentTextureName());
+                    ClientLocalModelManager.syncServerVisibleDefault();
+                    return;
                 }
-                cap.initModelWithTexture(this.modelIdHolder.getModelId(), this.modelIdHolder.getCurrentTextureName());
+                ClientLocalModelManager.clearCurrentSelection();
+                if (NetworkHandler.isClientConnected()) {
+                    NetworkHandler.sendToServer(new C2SRequestSwitchModelPacket(selectedModelId, selectedTextureName));
+                    return;
+                }
+                cap.initModelWithTexture(selectedModelId, selectedTextureName);
             });
         }
     }

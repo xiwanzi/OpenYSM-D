@@ -1,6 +1,7 @@
 package com.elfmcys.yesstevemodel.client.gui;
 
 import com.elfmcys.yesstevemodel.client.event.AnimationLockEvent;
+import com.elfmcys.yesstevemodel.client.ClientLocalModelManager;
 import com.elfmcys.yesstevemodel.client.gui.custom.ExtraAnimationButtons;
 import com.elfmcys.yesstevemodel.YesSteveModel;
 import com.elfmcys.yesstevemodel.capability.PlayerCapabilityProvider;
@@ -294,7 +295,7 @@ public class AnimationRouletteScreen extends Screen {
             int iRound2 = Math.round(110.0f / iMax2);
             ConfigCheckBox configCheckBox = new ConfigCheckBox(this.centerX + 127 + (iRound2 * (idx % iMax2)), this.centerY + rowY, iRound2, mutableComponentLiteral2, bool -> {
                 executeExpression(str4, null);
-                if (!GeckoLibCache.isRoamingVariableAssignment(str4) && NetworkHandler.isClientConnected() && !ServerConfig.LOW_BANDWIDTH_USAGE.get().booleanValue()) {
+                if (!ClientLocalModelManager.isLocalAnimatable(this.animatableModel) && !GeckoLibCache.isRoamingVariableAssignment(str4) && NetworkHandler.isClientConnected() && !ServerConfig.LOW_BANDWIDTH_USAGE.get().booleanValue()) {
                     NetworkHandler.sendToServer(new C2SRequestExecuteMolangPacket(str4, this.animatableModel.getEntity().getId()));
                 }
                 init();
@@ -332,7 +333,7 @@ public class AnimationRouletteScreen extends Screen {
         ConfigCheckBox configCheckBox = new ConfigCheckBox(this.centerX + 125, this.centerY + iArr[0], mutableComponentLiteral, bool -> {
             String str2 = checkboxConfig.getValue() + "=" + (bool.booleanValue() ? "1" : "0");
             executeExpression(str2, null);
-            if (!GeckoLibCache.isRoamingVariableAssignment(str2) && NetworkHandler.isClientConnected() && !ServerConfig.LOW_BANDWIDTH_USAGE.get().booleanValue()) {
+            if (!ClientLocalModelManager.isLocalAnimatable(this.animatableModel) && !GeckoLibCache.isRoamingVariableAssignment(str2) && NetworkHandler.isClientConnected() && !ServerConfig.LOW_BANDWIDTH_USAGE.get().booleanValue()) {
                 NetworkHandler.sendToServer(new C2SRequestExecuteMolangPacket(str2, this.animatableModel.getEntity().getId()));
             }
         }) {
@@ -507,7 +508,11 @@ public class AnimationRouletteScreen extends Screen {
 
     private void playAnimation(String str) {
         LocalPlayer localPlayer = getMinecraft().player;
-        if (NetworkHandler.isClientConnected()) {
+        if (ClientLocalModelManager.isLocalAnimatable(this.animatableModel) && localPlayer != null) {
+            localPlayer.getCapability(PlayerCapabilityProvider.PLAYER_CAP).ifPresent(cap -> {
+                cap.requestModelSwitch(str);
+            });
+        } else if (NetworkHandler.isClientConnected()) {
             Pair<String, Integer> pairPeekLast = navigationStack.peekLast();
             String str2 = StringPool.EMPTY;
             if (pairPeekLast != null && StringUtils.isNotBlank(pairPeekLast.getLeft())) {

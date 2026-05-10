@@ -41,12 +41,12 @@ public class AudioPlayerManager {
         if (soundId != 0) {
             if (forceReplace) {
                 IAudioPlayer previousPlayer = this.activePlayers.put(soundId, soundInstance);
-                if (previousPlayer != null && !previousPlayer.isStopped()) {
+                if (previousPlayer != null && !previousPlayer.isAudioStopped()) {
                     previousPlayer.release();
                 }
             } else {
                 if (this.activePlayers.compute(soundId, (num, existingPlayer) -> {
-                    if (existingPlayer == null || existingPlayer.isStopped()) {
+                    if (existingPlayer == null || existingPlayer.isAudioStopped()) {
                         return soundInstance;
                     }
                     return existingPlayer;
@@ -85,10 +85,10 @@ public class AudioPlayerManager {
     public void tick() {
         ObjectIterator objectIteratorFastIterator = this.activePlayers.int2ReferenceEntrySet().fastIterator();
         while (objectIteratorFastIterator.hasNext()) {
-            if (((IAudioPlayer) ((Int2ReferenceMap.Entry) objectIteratorFastIterator.next()).getValue()).isStopped()) {
+            if (((IAudioPlayer) ((Int2ReferenceMap.Entry) objectIteratorFastIterator.next()).getValue()).isAudioStopped()) {
                 objectIteratorFastIterator.remove();
             }
         }
-        this.playerList.removeIf(IAudioPlayer::isStopped);
+        this.playerList.removeIf(IAudioPlayer::isAudioStopped);
     }
 }

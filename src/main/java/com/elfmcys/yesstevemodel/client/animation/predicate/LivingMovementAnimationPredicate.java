@@ -14,6 +14,7 @@ import com.elfmcys.yesstevemodel.client.entity.IPreviewAnimatable;
 import com.elfmcys.yesstevemodel.molang.runtime.ExpressionEvaluator;
 import com.elfmcys.yesstevemodel.client.animation.condition.ConditionVehicle;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Saddleable;
 import net.minecraft.world.entity.animal.Pig;
 import net.minecraft.world.entity.player.Player;
@@ -33,24 +34,24 @@ public class LivingMovementAnimationPredicate implements IAnimationPredicate<Liv
     public PlayState renderRidingAnimation(AnimationEvent<LivingAnimatable<?>> event) {
         Entity vehicle;
         ConditionChair conditionChair;
-        Player player = (Player) ((LivingAnimatable) event.getAnimatable()).getEntity();
-        if (player == null || (event.getAnimatable() instanceof IPreviewAnimatable) || (vehicle = player.getVehicle()) == null || !vehicle.isAlive()) {
+        LivingEntity livingEntity = event.getAnimatable().getEntity();
+        if (livingEntity == null || (event.getAnimatable() instanceof IPreviewAnimatable) || (vehicle = livingEntity.getVehicle()) == null || !vehicle.isAlive()) {
             return null;
         }
-        String str = SWEMCompat.getHorseGaitName(player);
+        String str = SWEMCompat.getHorseGaitName(livingEntity);
         if (StringUtils.isNoneBlank(str)) {
             return IAnimationPredicate.playAnimationWithLoop(event, str, ILoopType.EDefaultLoopTypes.LOOP);
         }
         ConditionManager conditionManager = event.getAnimatable().getModelConfig();
         if (TouhouLittleMaidCompat.isLoaded() && (conditionChair = conditionManager.getChair()) != null) {
-            String str2 = conditionChair.doTest(player);
+            String str2 = conditionChair.doTest(livingEntity);
             if (StringUtils.isNoneBlank(str2)) {
                 return IAnimationPredicate.playAnimationWithLoop(event, str2, ILoopType.EDefaultLoopTypes.LOOP);
             }
         }
         ConditionVehicle conditionVehicle = conditionManager.getVehicle();
         if (conditionVehicle != null) {
-            String str3 = conditionVehicle.doTest(player);
+            String str3 = conditionVehicle.doTest(livingEntity);
             if (StringUtils.isNoneBlank(str3)) {
                 return IAnimationPredicate.playAnimationWithLoop(event, str3, ILoopType.EDefaultLoopTypes.LOOP);
             }
@@ -64,12 +65,12 @@ public class LivingMovementAnimationPredicate implements IAnimationPredicate<Liv
         if (vehicle instanceof Boat) {
             return IAnimationPredicate.playAnimationWithLoop(event, "boat", ILoopType.EDefaultLoopTypes.LOOP);
         }
-        boolean isCarrying = (player instanceof Player) && CarryOnCompat.isPlayerCarrying(player);
-        boolean isMaidPiggyback = TouhouLittleMaidCompat.isMaidEntity(player) && (player.getVehicle() instanceof Player);
+        boolean isCarrying = livingEntity instanceof Player player && CarryOnCompat.isPlayerCarrying(player);
+        boolean isMaidPiggyback = TouhouLittleMaidCompat.isMaidEntity(livingEntity) && (livingEntity.getVehicle() instanceof Player);
         if (isCarrying || isMaidPiggyback) {
             return IAnimationPredicate.playAnimationWithLoop(event, "carryon:princess", ILoopType.EDefaultLoopTypes.LOOP);
         }
-        PlayState playState = TouhouLittleMaidCompat.handleMaidInteraction(event, player, vehicle);
+        PlayState playState = TouhouLittleMaidCompat.handleMaidInteraction(event, livingEntity, vehicle);
         if (playState != null) {
             return playState;
         }

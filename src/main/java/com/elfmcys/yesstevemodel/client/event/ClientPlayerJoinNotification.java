@@ -1,6 +1,7 @@
 package com.elfmcys.yesstevemodel.client.event;
 
 import com.elfmcys.yesstevemodel.client.ClientModelManager;
+import com.elfmcys.yesstevemodel.client.ClientLocalModelManager;
 import com.elfmcys.yesstevemodel.YesSteveModel;
 import com.elfmcys.yesstevemodel.network.NetworkHandler;
 import net.minecraft.client.Minecraft;
@@ -22,6 +23,7 @@ public class ClientPlayerJoinNotification {
             return;
         }
         ClientModelManager.runPendingModelCallback();
+        ClientLocalModelManager.reloadLocalModelsAsync(true);
         notified = true;
         if (!YesSteveModel.isAvailable()) {
             YesSteveModel.sendUnavailableMessage();
@@ -53,6 +55,7 @@ public class ClientPlayerJoinNotification {
             if (!YesSteveModel.isAvailable()) {
                 return;
             }
+            ClientLocalModelManager.clearRuntimeState();
             ClientModelManager.resetSync();
         }
     }

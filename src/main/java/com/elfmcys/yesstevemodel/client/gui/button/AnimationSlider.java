@@ -1,6 +1,7 @@
 package com.elfmcys.yesstevemodel.client.gui.button;
 
 import com.elfmcys.yesstevemodel.YesSteveModel;
+import com.elfmcys.yesstevemodel.client.ClientLocalModelManager;
 import com.elfmcys.yesstevemodel.client.gui.ISpecialWidget;
 import com.elfmcys.yesstevemodel.config.ServerConfig;
 import com.elfmcys.yesstevemodel.geckolib3.core.AnimatableEntity;
@@ -37,7 +38,7 @@ public class AnimationSlider extends ForgeSlider implements ISpecialWidget {
         try {
             String str = this.controllerName + "=" + getValue();
             this.model.executeExpression(GeckoLibCache.parseSimpleExpression(str), true, false, null);
-            if (!GeckoLibCache.isRoamingVariableAssignment(str) && NetworkHandler.isClientConnected() && !ServerConfig.LOW_BANDWIDTH_USAGE.get().booleanValue()) {
+            if (!ClientLocalModelManager.isLocalAnimatable(this.model) && !GeckoLibCache.isRoamingVariableAssignment(str) && NetworkHandler.isClientConnected() && !ServerConfig.LOW_BANDWIDTH_USAGE.get().booleanValue()) {
                 NetworkHandler.sendToServer(new C2SRequestExecuteMolangPacket(str, this.model.getEntity().getId()));
             }
         } catch (ParseException e) {

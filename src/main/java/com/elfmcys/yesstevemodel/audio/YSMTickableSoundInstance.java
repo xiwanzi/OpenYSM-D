@@ -55,6 +55,11 @@ public class YSMTickableSoundInstance extends AbstractTickableSoundInstance impl
         });
     }
 
+    @Override
+    public boolean isAudioStopped() {
+        return this.isStopped();
+    }
+
     public void setLooping(boolean z) {
         this.looping = z;
     }

@@ -1,5 +1,6 @@
 package com.elfmcys.yesstevemodel.client.entity;
 
+import com.elfmcys.yesstevemodel.client.ClientLocalModelManager;
 import com.elfmcys.yesstevemodel.geckolib3.core.controller.controllers.PlayerAnimationController;
 import com.elfmcys.yesstevemodel.client.animation.molang.MolangEventDispatcher;
 import com.elfmcys.yesstevemodel.client.model.ModelAssembly;
@@ -122,7 +123,7 @@ public abstract class CustomPlayerEntity extends LivingAnimatable<Player> implem
         super.afterSetupAnim(seekTime, isFirstPerson);
         if (this.isLocalPlayer && isFirstPerson && isModelSwitching() && getAnimationState(PlayerAnimationController.CAP_CONTROLLER_KEY) == AnimationState.IDLE) {
             clearModelSwitch();
-            if (NetworkHandler.isClientConnected()) {
+            if (NetworkHandler.isClientConnected() && !ClientLocalModelManager.isLocalModelId(getModelId())) {
                 NetworkHandler.sendToServer(C2SPlayAnimationPacket.createDefault());
             }
         }

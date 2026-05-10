@@ -105,7 +105,6 @@ public class YSMClientCache {
         File[] files = cacheDir.listFiles();
         if (files == null) return cacheIndex;
 
-        System.out.println("scanning cache directory");
         for (File file : files) {
             if (file.isFile()) {
                 UUID realModelUuid = getModelUUIDFromFileName(file.getName(), rtKey);
@@ -114,7 +113,6 @@ public class YSMClientCache {
                 }
             }
         }
-        System.out.println("indexed " + cacheIndex.size() + " cached models.");
         return cacheIndex;
     }
 }

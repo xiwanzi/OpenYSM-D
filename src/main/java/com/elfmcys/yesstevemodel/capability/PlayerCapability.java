@@ -2,6 +2,7 @@ package com.elfmcys.yesstevemodel.capability;
 
 import com.elfmcys.yesstevemodel.client.animation.molang.struct.RoamingStruct;
 import com.elfmcys.yesstevemodel.client.animation.molang.struct.RoamingSyncBatch;
+import com.elfmcys.yesstevemodel.client.ClientLocalModelManager;
 import com.elfmcys.yesstevemodel.client.compat.bettercombat.BetterCombatCompat;
 import com.elfmcys.yesstevemodel.client.compat.firstperson.FirstPersonCompat;
 import com.elfmcys.yesstevemodel.client.entity.PlayerEntityFrameState;
@@ -196,7 +197,9 @@ public final class PlayerCapability extends CustomPlayerEntity {
                         }
                         i++;
                     }
-                    NetworkHandler.sendToServer(new C2SCompleteFeedbackPacket(new FeedbackData(this.currentModelHashId, new Object2FloatArrayMap(strArr, fArr), null, this.entity.getId())));
+                    if (!ClientLocalModelManager.isLocalModelId(getModelId())) {
+                        NetworkHandler.sendToServer(new C2SCompleteFeedbackPacket(new FeedbackData(this.currentModelHashId, new Object2FloatArrayMap(strArr, fArr), null, this.entity.getId())));
+                    }
                 }
             }
         }
